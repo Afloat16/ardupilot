@@ -42,27 +42,25 @@ last_ms = None
 
 while True:
     hdr_raw = f.read(12)
-    if len(hdr_raw) != 12:
-        if args.loop:
+    if not hdr_raw:
+        if args.loop and last_ms is not None:
             f.seek(0)
+            last_ms = None
             continue
         print("EOF")
         break
+    if len(hdr_raw) != 12:
+        parser.exit(1, "Truncated capture header\n")
     magic, t_ms, n = struct.unpack("<III", hdr_raw)
     if magic != 0x7fe53b04:
-        print("Bad magic")
-        break
+        parser.exit(1, "Bad capture magic\n")
+    data = f.read(n)
+    if len(data) != n:
+        parser.exit(1, "Truncated capture data\n")
     if last_ms is not None:
         dt = t_ms - last_ms
         if dt > 0:
             time.sleep(dt*0.001)
     last_ms = t_ms
-    data = f.read(n)
-    if len(data) != n:
-        if args.loop:
-            f.seek(0)
-            continue
-        print("short data, EOF")
-        break
-    tcpsock.send(data)
+    tcpsock.sendall(data)
     print("Wrote %u bytes t=%.3f" % (len(data), t_ms*0.001))
